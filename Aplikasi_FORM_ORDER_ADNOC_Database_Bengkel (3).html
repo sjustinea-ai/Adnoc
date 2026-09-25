@@ -1,0 +1,400 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#111827"><title>Aplikasi Form Order ADNOC - Database Bengkel</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f3f4f6;font-family:Arial;color:#111827}header{background:#111827;color:#fff;padding:18px 16px;position:sticky;top:0;z-index:2}h1{font-size:21px;margin:0}header p{margin:5px 0 0;color:#cbd5e1;font-size:12px}main{max-width:760px;margin:auto;padding:14px}.card{background:#fff;padding:16px;border-radius:14px;margin-bottom:14px;box-shadow:0 2px 9px #0001}label{display:block;font-size:12px;font-weight:bold;margin:10px 0 5px}input,select,textarea{width:100%;padding:12px;border:1px solid #d1d5db;border-radius:9px;font-size:15px}textarea{min-height:65px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}button{padding:12px;border:0;border-radius:9px;font-weight:bold;font-size:14px}.primary{background:#111827;color:white}.green{background:#16a34a;color:white}.blue{background:#2563eb;color:white}.gray{background:#e5e7eb}.red{background:#dc2626;color:#fff}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.item{border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-top:8px}.item b{display:block}.muted{font-size:12px;color:#6b7280}pre{white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;padding:14px;border-radius:9px;line-height:1.5}table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:7px;border-bottom:1px solid #e5e7eb;text-align:left}@media(max-width:520px){.row,.actions{grid-template-columns:1fr}}</style><script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<script>
+// Database dasar nama bengkel/toko, diambil dari file Excel "Daftar Nama Pelanggan dan Pivot.xlsx"
+const WORKSHOP_DATABASE = ["ABDUL SPEED AKA FAJAR MOTOR", "AEREMAP BANDUNG", "AGNIA MOTOR", "ASHIFA MOTOR", "ATHUNK GARAGE", "B PERFORMANCE", "BAITECH", "BIB MOTOR", "BULL GARAGE", "CENTRAL AUTOPART", "CEPS PERFORMANCE", "CETTA GARAGE", "D&S AUTO SERVICE", "DEUS MOTOSHOP X BMB", "FAJAR MOTOR", "GARAGE SERVICE & REPAIR", "GRIYA AUTO PEUGEOT BMW", "HELDA JAYA MOTOR", "JAVA NUSANTARA", "KEBON SAWIT GARAGE", "KEMBAR JAYA MOTOR (JABAR)", "MAJU MOTOR", "MG MANUAL TECH", "MIT GARAGE", "MOBILINDO BMW", "NEXT PRIMA BMW", "OTOMART", "PAMMA", "Q STATION MOTOR", "R2 RACING (BANDUNG)", "SCOOTER HOUSE DJAKARTA (SHD BDG)", "SONICS ENGINEERING", "STR GARAGE", "SUNDA FORTUNA", "SURYA JAYA MOTOR", "UNCLE 908 GARAGE", "VAL CHEVY", "VOLCANO MOTORSPORT"];
+
+// Kunci penyimpanan nama bengkel baru yang ditambahkan lewat aplikasi (persisten di browser ini)
+const WORKSHOP_EXTRA_KEY = "workshopExtraDB";
+
+function getExtraWorkshops(){
+  try{ return JSON.parse(localStorage.getItem(WORKSHOP_EXTRA_KEY) || "[]"); }
+  catch(e){ return []; }
+}
+
+function getAllWorkshops(){
+  let extra = getExtraWorkshops();
+  let all = [...WORKSHOP_DATABASE, ...extra];
+  // Hilangkan duplikat (tidak peka huruf besar/kecil), lalu urutkan A-Z
+  let seen = new Set(), unique = [];
+  all.forEach(n=>{
+    let key = String(n).trim().toLowerCase();
+    if(key && !seen.has(key)){ seen.add(key); unique.push(String(n).trim()); }
+  });
+  return unique.sort((a,b)=>a.localeCompare(b,"id"));
+}
+
+function renderWorkshopList(){
+  let info = document.getElementById("workshopDbInfo");
+  if(info) info.textContent = `Database bengkel: ${getAllWorkshops().length} nama tersimpan`;
+  filterWorkshopSelect();
+}
+
+function filterWorkshopSelect(){
+  let sel = document.getElementById("workshopSelect");
+  if(!sel) return;
+  let q = String(document.getElementById("workshop") ? document.getElementById("workshop").value : "").trim().toLowerCase();
+  let list = getAllWorkshops().filter(n=>!q || n.toLowerCase().includes(q));
+  sel.innerHTML = '<option value="">-- Pilih Bengkel dari Database --</option>'
+    + list.map(n=>`<option value="${String(n).replace(/"/g,"&quot;")}">${n}</option>`).join("");
+}
+
+function addWorkshopIfNew(name){
+  name = String(name||"").trim();
+  if(!name) return;
+  let all = getAllWorkshops();
+  let exists = all.some(n=>n.toLowerCase()===name.toLowerCase());
+  if(!exists){
+    let extra = getExtraWorkshops();
+    extra.push(name);
+    localStorage.setItem(WORKSHOP_EXTRA_KEY, JSON.stringify(extra));
+    renderWorkshopList();
+  }
+}
+</script>
+</head>
+<body><header><h1>Aplikasi Form Order ADNOC</h1><p>Database harga ADNOC • Output WhatsApp • Rekap bulanan</p>
+<button type="button" onclick="exportRecapToExcel()" style="background:#217346;color:#fff;border:0;border-radius:8px;padding:9px 14px;margin:8px 0;cursor:pointer;font-weight:600">
+  📊 Export Rekap Bulanan ke Excel
+</button>
+<button type="button" onclick="exportWorkshopDbToExcel()" style="background:#2563eb;color:#fff;border:0;border-radius:8px;padding:9px 14px;margin:8px 0 8px 8px;cursor:pointer;font-weight:600">
+  🏪 Export Database Bengkel ke Excel
+</button>
+</header><main>
+<section class="card"><label>Tanggal</label><input id="date" type="date"><label>Nama Sales</label><input id="sales" placeholder="Justine"><label>Area</label><input id="area" placeholder="Bandung"><label>Nama Bengkel</label><input id="workshop" placeholder="Ketik untuk mencari, atau ketik nama baru..." autocomplete="off" oninput="filterWorkshopSelect()" onchange="addWorkshopIfNew(this.value)" onblur="addWorkshopIfNew(this.value)"><select id="workshopSelect"><option value="">-- Pilih Bengkel dari Database --</option></select><div class="muted" id="workshopDbInfo" style="margin-top:5px"></div></section>
+<section class="card"><h3 style="margin:0">Sales Order</h3><div class="muted" id="dbInfo" style="margin-top:5px"></div>
+<label>Cari / Pilih Barang</label>
+<input id="productFilter" placeholder="Ketik untuk mencari barang..." autocomplete="off">
+<select id="search"><option value="">-- Pilih Barang --</option></select>
+<div class="row"><div><label>SAE / Spesifikasi</label><select id="sae"></select></div><div><label>Pack</label><select id="pack"></select></div></div>
+<div class="row"><div><label>Satuan Order</label><select id="unit"><option value="dus">Dus</option><option value="pcs">PCS</option></select></div><div><label>Isi per Dus</label><input id="packSize" readonly placeholder="Otomatis"></div></div><label>Harga / Satuan Order</label><input id="price" readonly placeholder="Otomatis dari database">
+<div class="row">
+<div><label id="qtyLabel">Jumlah Dus</label><input id="qty" type="number" min="0.01" step="0.01" value="1"></div>
+<div><label>Diskon 1 (%)</label><input id="disc1" type="number" min="0" max="100" step="0.01" value="20"></div>
+</div>
+<div class="row">
+<div><label>Diskon 2 (%)</label><input id="disc2" type="number" min="0" max="100" step="0.01" placeholder="Opsional"></div>
+<div><label>Diskon 3 (%)</label><input id="disc3" type="number" min="0" max="100" step="0.01" placeholder="Opsional"></div>
+</div>
+<div class="row">
+<div><label>Diskon 4 (%)</label><input id="disc4" type="number" min="0" max="100" step="0.01" placeholder="Opsional"></div>
+<div><label>Diskon 5 (%)</label><input id="disc5" type="number" min="0" max="100" step="0.01" placeholder="Opsional"></div>
+</div>
+<div id="hint" class="muted" style="margin-top:7px"></div>
+<div id="discountPreview" class="muted" style="margin-top:7px"></div>
+<div class="actions"><button class="blue" onclick="addItem()">+ Tambah Barang</button><button class="gray" onclick="clearItems()">Kosongkan</button></div><div id="items"></div></section>
+<section class="card"><label>TOP</label><input id="top" placeholder="30 Hari"><label>Note</label><textarea id="note"></textarea><div class="actions"><button class="primary" onclick="makeOutput()">BUAT FORMAT WA</button><button class="green" onclick="saveOrder()">SIMPAN KE REKAP</button></div></section>
+<section class="card"><h3 style="margin-top:0">Output WhatsApp</h3><pre id="output">Belum ada output.</pre><button class="green" style="width:100%" onclick="copyWA()">SALIN UNTUK WHATSAPP</button></section>
+<section class="card"><h3 style="margin-top:0">Rekap Bulanan</h3><div class="row"><input id="month" type="month"><button class="blue" onclick="renderRecap()">TAMPILKAN REKAP</button></div><div id="summary" class="muted" style="margin:10px 0"></div><div style="overflow:auto"><table><thead><tr><th>Tanggal</th><th>Sales</th><th>Bengkel</th><th>Barang</th><th>SAE</th><th>Satuan</th><th>Qty</th><th>Pack</th><th>Harga Awal</th><th>Harga/PCS</th><th>Disc Bertingkat</th><th>Harga Akhir</th><th>Total</th><th>Aksi</th></tr></thead><tbody id="body"></tbody></table></div></section>
+</main>
+<script>
+const DB=[{"name": "ADNOC Voyager Blue", "sae": "10W60", "pack": "12X1", "price": 380000}, {"name": "ADNOC Voyager Blue", "sae": "10W60", "pack": "6X4", "price": 1520000}, {"name": "ADNOC Voyager Blue", "sae": "5W20", "pack": "12X1", "price": 258000}, {"name": "ADNOC Voyager Blue", "sae": "5W20", "pack": "6X4", "price": 1032000}, {"name": "ADNOC Voyager Gold", "sae": "0W40", "pack": "12X1", "price": 290000}, {"name": "ADNOC Voyager Gold", "sae": "0W40", "pack": "6X4", "price": 1160000}, {"name": "ADNOC Voyager Gold", "sae": "5W40", "pack": "12X1", "price": 206000}, {"name": "ADNOC Voyager Gold", "sae": "5W40", "pack": "6X4", "price": 825000}, {"name": "ADNOC Voyager Gold", "sae": "5W30", "pack": "12X1", "price": 206000}, {"name": "ADNOC Voyager Gold", "sae": "5W30", "pack": "6X4", "price": 825000}, {"name": "ADNOC Voyager Starplus Hybrid", "sae": "0W16", "pack": "12X1", "price": 231000}, {"name": "ADNOC Voyager Starplus Hybrid", "sae": "0W16", "pack": "6X4", "price": 924000}, {"name": "ADNOC Voyager Starplus Eco", "sae": "0W20", "pack": "12X1", "price": 194000}, {"name": "ADNOC Voyager Starplus Eco", "sae": "0W20", "pack": "6X4", "price": 776000}, {"name": "ADNOC Voyager Starplus Eco", "sae": "5W30", "pack": "12X1", "price": 180000}, {"name": "ADNOC Voyager Starplus Eco", "sae": "5W30", "pack": "6X4", "price": 720000}, {"name": "ADNOC Voyager Silver Plus Eco", "sae": "0W20", "pack": "12X1", "price": 178000}, {"name": "ADNOC Voyager Silver Plus Eco", "sae": "0W20", "pack": "6X4", "price": 712000}, {"name": "ADNOC Voyager Silver Plus Eco", "sae": "5W30", "pack": "12X1", "price": 172000}, {"name": "ADNOC Voyager Silver Plus Eco", "sae": "5W30", "pack": "6X4", "price": 688000}, {"name": "ADNOC Voyager Silver Advance", "sae": "5W30", "pack": "12X1", "price": 142000}, {"name": "ADNOC Voyager Silver Advance", "sae": "5W30", "pack": "6X4", "price": 568000}, {"name": "ADNOC Voyager Silver", "sae": "10W30", "pack": "12X1", "price": 133000}, {"name": "ADNOC Voyager Silver", "sae": "10W30", "pack": "6X4", "price": 532000}, {"name": "ADNOC Voyager Silver", "sae": "10W40", "pack": "12X1", "price": 133000}, {"name": "ADNOC Voyager Silver", "sae": "10W40", "pack": "6X4", "price": 532000}, {"name": "ADNOC Voyager Bronze Special", "sae": "10W40", "pack": "12X1", "price": 110000}, {"name": "ADNOC Voyager Bronze Special", "sae": "10W40", "pack": "6X4", "price": 440000}, {"name": "ADNOC Voyager Bronze Special", "sae": "20W50", "pack": "12X1", "price": 112000}, {"name": "ADNOC Voyager Bronze Special", "sae": "20W50", "pack": "6X4", "price": 448000}, {"name": "ADNOC Voyager Blue Advance", "sae": "5W30", "pack": "12X1", "price": 188000}, {"name": "ADNOC Voyager Blue Advance", "sae": "5W30", "pack": "6X4", "price": 752000}, {"name": "ADNOC Voyager Bronze Advanced", "sae": "5W30", "pack": "12X1", "price": 169000}, {"name": "ADNOC Voyager Bronze Advanced", "sae": "5W30", "pack": "6X4", "price": 676000}, {"name": "ADNOC Voyager Plus", "sae": "10W30", "pack": "12X1", "price": 110000}, {"name": "ADNOC Voyager Plus", "sae": "10W30", "pack": "6X4", "price": 440000}, {"name": "ADNOC Voyager Plus", "sae": "10W40", "pack": "12X1", "price": 112000}, {"name": "ADNOC Voyager Plus", "sae": "10W40", "pack": "6X4", "price": 448000}, {"name": "ADNOC Voyager Plus", "sae": "15W40", "pack": "12X1", "price": 106000}, {"name": "ADNOC Voyager Plus", "sae": "15W40", "pack": "6X4", "price": 424000}, {"name": "ADNOC DCT Fluid", "sae": "DCTF", "pack": "12X1", "price": 225000}, {"name": "ADNOC CVT Fluid", "sae": "CVT", "pack": "12X1", "price": 210000}, {"name": "ADNOC ATF Universal", "sae": "UNIVERSAL ATF", "pack": "12X1", "price": 210000}, {"name": "ADNOC Gear Oil", "sae": "DEX III-H", "pack": "12X1", "price": 138000}, {"name": "ADNOC Gear Oil", "sae": "GL-5 75W90", "pack": "12X1", "price": 388000}, {"name": "ADNOC Gear Oil", "sae": "GL-5 75W80", "pack": "12X1", "price": 250000}, {"name": "ADNOC Gear Oil GLX LS", "sae": "GL-5 80W90", "pack": "12X1", "price": 148000}, {"name": "ADNOC Gear Oil GLX", "sae": "GL-5 85W90", "pack": "12X1", "price": 118000}, {"name": "ADNOC Gear Oil GP", "sae": "GL-4 80W90", "pack": "12X1", "price": 116000}, {"name": "ADNOC Voyager MPX4-N", "sae": "5W40", "pack": "12X1L", "price": 164000}, {"name": "ADNOC Voyager MPX4-N", "sae": "15W50", "pack": "12X1L", "price": 145000}, {"name": "ADNOC Voyager MPX4-N", "sae": "10W40", "pack": "12X1L", "price": 155000}, {"name": "ADNOC Voyager MPX4-L", "sae": "20W50", "pack": "12X1L", "price": 105000}, {"name": "ADNOC Voyager MPX4-L", "sae": "10W40", "pack": "12X1L", "price": 96000}, {"name": "ADNOC Voyager MPX4-L", "sae": "10W40", "pack": "12X0.8L", "price": 86000}, {"name": "ADNOC Voyager SPX4-N", "sae": "10W40", "pack": "12X1L", "price": 155000}, {"name": "ADNOC Voyager SPX4-L", "sae": "10W40", "pack": "12X1L", "price": 96000}, {"name": "ADNOC Voyager SPX4-L", "sae": "10W30", "pack": "12X0.8L", "price": 86000}, {"name": "ADNOC Voyager SPX4-L", "sae": "10W40", "pack": "12X0.8L", "price": 86000}, {"name": "ADNOC Supreme Plus 2T", "sae": "2T", "pack": "12X1L", "price": 216000}, {"name": "ADNOC Supreme 2T", "sae": "2T", "pack": "12X1L", "price": 145000}, {"name": "ADNOC E-Brake Fluid DOT 5.1", "sae": "SAE J1704-J1703", "pack": "24X500ML", "price": 119000}, {"name": "ADNOC Brake Fluid DOT 4", "sae": "SAE J1704", "pack": "48X250ML", "price": 54000}, {"name": "ADNOC Brake Fluid DOT 3", "sae": "SAE J1703", "pack": "48X250ML", "price": 45000}, {"name": "ADNOC Grease EP 2", "sae": "NLGI 2", "pack": "36X500 GRAM", "price": 80000}, {"name": "ADNOC Grease MP", "sae": "NLGI 3", "pack": "36X500 GRAM", "price": 78000}, {"name": "ADNOC Auto Cool Long Life Green", "sae": "50%", "pack": "12X1L", "price": 100000}, {"name": "ADNOC Auto Cool Long Life Green", "sae": "33%", "pack": "12X1L", "price": 88000}, {"name": "ADNOC Auto Cool Blue", "sae": "50%", "pack": "12X1L", "price": 92000}, {"name": "ADNOC Auto Cool Green", "sae": "33%", "pack": "12X1L", "price": 75000}];let items=[],selected=[];
+const $=id=>document.getElementById(id);
+function today(){let d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+$("date").value=today();$("month").value=today().slice(0,7);
+function populateProducts(filter=""){
+  let q=String(filter||"").trim().toLowerCase();
+  let names=[...new Set(DB.map(x=>x.name))].filter(n=>!q||n.toLowerCase().includes(q));
+  $("search").innerHTML='<option value="">-- Pilih Barang --</option>'+names.map(n=>`<option value="${n.replace(/"/g,"&quot;")}">${n}</option>`).join("");
+}
+$("productFilter").addEventListener("input",()=>populateProducts($("productFilter").value));
+$("workshopSelect").addEventListener("change",()=>{ if($("workshopSelect").value){ $("workshop").value=$("workshopSelect").value; } });
+$("search").addEventListener("change",loadProduct);
+$("sae").addEventListener("change",updatePrice);
+$("pack").addEventListener("change",updatePrice);
+$("unit").addEventListener("change",updatePrice);
+function matches(){
+  let q=String($("search").value||"").trim().toLowerCase();
+  return q?DB.filter(x=>x.name.toLowerCase()===q):[];
+}
+function loadProduct(){
+  let m=matches();
+  $("sae").innerHTML=m.length?[...new Set(m.map(x=>x.sae))].map(x=>`<option>${x}</option>`).join(""):'<option value="">-- Pilih SAE --</option>';
+  $("pack").innerHTML=m.length?[...new Set(m.map(x=>x.pack))].map(x=>`<option>${x}</option>`).join(""):'<option value="">-- Pilih Pack --</option>';
+  updatePrice();
+}
+function packQty(pack){let m=String(pack||"").match(/^(\d+)\s*[xX]/);return m?Number(m[1]):1}
+function updateUnitUI(){let u=$("unit").value;$("qtyLabel").textContent=u==="pcs"?"Jumlah PCS":"Jumlah Dus";$("qty").step=u==="pcs"?"1":"0.01";$("qty").min=u==="pcs"?"1":"0.01"}
+function updatePrice(){
+  let m=matches();
+  let x=m.find(a=>a.sae===$("sae").value&&a.pack===$("pack").value)||m[0];
+  let u=$("unit").value;
+  updateUnitUI();
+  if(x){
+    let n=packQty(x.pack);
+    let unitPrice=u==="pcs"?x.price/n:x.price;
+    $("price").value=rupiah(unitPrice);
+    $("packSize").value=n+" PCS/DUS";
+    $("hint").textContent=`${x.name} • ${x.sae} • ${x.pack} • Harga ${u.toUpperCase()}: ${rupiah(unitPrice)}`;
+  }else{
+    $("price").value="";
+    $("packSize").value="";
+    $("hint").textContent="";
+  }
+}
+function rupiah(n){return "Rp "+Math.round(Number(n)||0).toLocaleString("id-ID")}
+function getDiscounts(){
+  return [1,2,3,4,5].map(i=>Number($("disc"+i).value)||0).filter(v=>v>0);
+}
+function calcDiscount(price, discounts){
+  let current=Number(price)||0, steps=[];
+  discounts.forEach((p,i)=>{
+    let before=current, amount=before*p/100;
+    current=before-amount;
+    steps.push({no:i+1,p,before,amount,after:current});
+  });
+  return {final:current,steps};
+}
+function updateDiscountPreview(){
+  let price=Number((($("price").value||"").replace(/[^0-9.]/g,""))||0);
+  let ds=getDiscounts();
+  if(!price){$("discountPreview").textContent="";return}
+  let c=calcDiscount(price,ds);
+  $("discountPreview").innerHTML=c.steps.length
+    ? c.steps.map(s=>`Disc ${s.p}%: -${rupiah(s.amount)} → ${rupiah(s.after)}`).join("<br>")+`<br><b>Harga akhir: ${rupiah(c.final)}</b>`
+    : `<b>Harga akhir: ${rupiah(price)}</b>`;
+}
+["disc1","disc2","disc3","disc4","disc5"].forEach(id=>$(`${id}`).addEventListener("input",updateDiscountPreview));
+function addItem(){
+  let m=matches(),x=m.find(a=>a.sae===$("sae").value&&a.pack===$("pack").value)||m[0],q=Number($("qty").value);
+  let discounts=getDiscounts(),u=$("unit").value;
+  if(!x||!q||q<=0){alert("Pilih barang dan jumlah.");return}
+  if(u==="pcs"&&!Number.isInteger(q)){alert("Jumlah PCS harus bilangan bulat.");return}
+  let orderPrice=u==="pcs"?x.price:x.price*packQty(x.pack);
+  let c=calcDiscount(orderPrice,discounts);
+  items.push({...x,unit:u,qty:q,packQty:packQty(x.pack),orderPrice,discounts,finalPrice:c.final,total:c.final*q});
+  renderItems();
+}
+function renderItems(){
+  $("items").innerHTML=items.map((x,i)=>{
+    let c=calcDiscount(x.orderPrice??x.price,x.discounts||[]);
+    return `<div class="item">
+      <b>${x.name}</b>
+      <span class="muted">${x.sae} • ${x.pack} • ${x.qty} ${x.unit.toUpperCase()}</span>
+      <div class="muted" style="margin-top:6px">Isi dus: ${x.packQty||packQty(x.pack)} PCS • Diskon: ${(x.discounts||[]).map(v=>v+"%").join(" + ")||"-"}</div>
+      <div class="muted">${c.steps.map(s=>`Disc ${s.p}%: -${rupiah(s.amount)} → ${rupiah(s.after)}`).join("<br>")||"Tanpa diskon"}</div>
+      <b style="margin-top:5px">Harga akhir: ${rupiah(c.final)}/${x.unit} • Total: ${rupiah(c.final*x.qty)}</b>
+      <button class="red" style="float:right;margin-top:-25px" onclick="items.splice(${i},1);renderItems()">Hapus</button>
+    </div>`
+  }).join("")||'<div class="muted">Belum ada barang.</div>';
+}
+function clearItems(){items=[];renderItems()}
+function dateText(v){let d=new Date(v+"T00:00:00");return d.toLocaleDateString("id-ID",{weekday:"long",day:"2-digit",month:"2-digit",year:"2-digit"})}
+function packLabel(pack){
+  let m=String(pack||"").match(/X([^X]+)$/i);
+  if(!m)return "";
+  let s=m[1].toUpperCase().replace(/ML$/," ML").replace(/L$/," L").replace(/GRAM$/," GRAM");
+  s=s.replace(/(\d+)\.(\d+)/g,"$1,$2");
+  return s.trim();
+}
+function makeOutput(){
+  if(!items.length){alert("Tambahkan barang terlebih dahulu.");return ""}
+
+  let lines=items.map(x=>{
+    let unitLabel=(x.unit||"dus").toLowerCase();
+    let name=(x.name||"").replace(/^ADNOC\s+/i,"");
+    let sae=x.sae ? ` ${x.sae}` : "";
+    let size=packLabel(x.pack);
+    let sizeText=size ? ` ${size}` : "";
+    return `*${name}${sae}${sizeText} ${x.qty} ${unitLabel}*`;
+  }).join("\n");
+
+  let ds=[...new Set(items.flatMap(x=>x.discounts||[]))];
+  let discText=ds.length ? ds.join("% + ")+"%" : "-";
+
+  let out=`FORM ORDER: 
+
+${dateText($("date").value)}
+
+NAMA SALES :
+${$("sales").value}
+
+AREA : ${$("area").value}
+
+NAMA BENGKEL: 
+${$("workshop").value}
+
+SALES ORDER :
+
+${lines}
+
+DISC : ${discText}
+TOP.  : ${$("top").value}
+
+NOTE. :
+${$("note").value}`;
+
+  $("output").textContent=out;
+  return out
+}
+async function copyWA(){let s=makeOutput();if(!s)return;try{await navigator.clipboard.writeText(s);alert("Sudah disalin untuk WhatsApp.")}catch(e){alert("Salin teks dari kotak Output WhatsApp.")}}
+function saveOrder(){if(!items.length){alert("Tambahkan barang terlebih dahulu.");return}addWorkshopIfNew($("workshop").value);makeOutput();let all=JSON.parse(localStorage.getItem("noo2")||"[]");items.forEach(x=>{let c=calcDiscount(x.orderPrice??x.price,x.discounts||[]);all.push({date:$("date").value,sales:$("sales").value,area:$("area").value,workshop:$("workshop").value,product:x.name,sae:x.sae,pack:x.pack,unit:x.unit,qty:x.qty,packQty:x.packQty||packQty(x.pack),price:x.orderPrice??x.price,pricePerDus:x.price,discounts:x.discounts||[],finalPrice:c.final,total:c.final*x.qty,top:$("top").value,note:$("note").value})});localStorage.setItem("noo2",JSON.stringify(all));alert("Berhasil disimpan ke rekap.");clearItems();["disc2","disc3","disc4","disc5"].forEach(id=>$(id).value="");updateDiscountPreview();renderRecap()}
+function deleteSavedOrder(index){
+  let all=JSON.parse(localStorage.getItem("noo2")||"[]");
+  if(index<0||index>=all.length)return;
+  if(!confirm("Hapus item ini dari Rekap Order?"))return;
+  all.splice(index,1);
+  localStorage.setItem("noo2",JSON.stringify(all));
+  renderRecap();
+}
+function renderRecap(){
+  let m=$("month").value;
+  let all=JSON.parse(localStorage.getItem("noo2")||"[]");
+  let d=all.map((x,i)=>({x,i})).filter(o=>o.x.date.startsWith(m));
+  $("body").innerHTML=d.map(o=>{let x=o.x;return `<tr><td>${x.date}</td><td>${x.sales}</td><td>${x.workshop}</td><td>${x.product}</td><td>${x.sae}</td><td>${(x.unit||"dus").toUpperCase()}</td><td>${x.qty}</td><td>${x.pack||"-"}</td><td>${rupiah(x.price)}</td><td>${rupiah(x.unit==="pcs" ? x.price : (x.price/(x.packQty||packQty(x.pack))))}</td><td>${(x.discounts||[]).map(v=>v+"%").join(" + ")||"-"}</td><td>${rupiah(x.finalPrice??x.price)}</td><td>${rupiah(x.total??(x.price*x.qty))}</td><td><button class="red" style="padding:7px 10px" onclick="deleteSavedOrder(${o.i})">Hapus</button></td></tr>`}).join("");
+  let totalQty=d.reduce((a,o)=>a+Number(o.x.qty||0),0);
+  $("summary").textContent=`${d.length} baris order • ${totalQty} unit order • Total ${rupiah(d.reduce((a,o)=>a+(o.x.total??o.x.price*o.x.qty),0))}`
+}
+populateProducts();$("dbInfo").textContent=`Database aktif: ${[...new Set(DB.map(x=>x.name))].length} produk / ${DB.length} kombinasi harga`;loadProduct();updateUnitUI();renderItems();updateDiscountPreview();renderRecap();renderWorkshopList();
+
+function exportRecapToExcel(){
+  const month = $("month").value;
+  if(!month){ alert("Pilih bulan rekap terlebih dahulu."); return; }
+
+  const all = JSON.parse(localStorage.getItem("noo2") || "[]");
+  const rows = all.filter(x => String(x.date || "").startsWith(month));
+  if(!rows.length){
+    alert("Tidak ada data rekap pada bulan yang dipilih.");
+    return;
+  }
+
+  // Pivot bulanan: satu baris = satu toko/bengkel unik.
+  // Produk berbeda pada toko yang sama digabung ke kolom produk masing-masing.
+  const normalize = v => String(v || "").trim().replace(/\s+/g," ").toLowerCase();
+  const money = n => Math.round(Number(n) || 0);
+
+  const stores = new Map();
+  const productKeys = new Map();
+
+  rows.forEach(x => {
+    const workshop = String(x.workshop || "").trim() || "(Tanpa Nama Bengkel)";
+    const storeKey = normalize(workshop);
+
+    const productLabel = [
+      String(x.product || "").replace(/^ADNOC\s+/i,"").trim(),
+      x.sae || "",
+      x.pack || "",
+      String(x.unit || "dus").toUpperCase()
+    ].filter(Boolean).join(" • ");
+
+    const pKey = normalize(productLabel);
+    if(!productKeys.has(pKey)) productKeys.set(pKey, productLabel);
+
+    if(!stores.has(storeKey)){
+      stores.set(storeKey,{
+        workshop,
+        sales:new Set(),
+        area:new Set(),
+        products:new Map(),
+        totalQty:0,
+        totalValue:0
+      });
+    }
+
+    const st = stores.get(storeKey);
+    if(x.sales) st.sales.add(String(x.sales).trim());
+    if(x.area) st.area.add(String(x.area).trim());
+
+    const qty = Number(x.qty) || 0;
+    const unit = String(x.unit || "dus").toUpperCase();
+
+    if(!st.products.has(pKey)) st.products.set(pKey,{qty:0,units:new Set()});
+    const pr = st.products.get(pKey);
+    pr.qty += qty;
+    pr.units.add(unit);
+
+    st.totalQty += qty;
+    st.totalValue += money(x.total != null ? x.total : ((x.finalPrice || x.price || 0) * qty));
+  });
+
+  const productList = [...productKeys.entries()];
+  const header = [
+    "Bulan","Nama Bengkel","Sales","Area",
+    ...productList.map(([k,label]) => label),
+    "Total Qty","Total Nilai"
+  ];
+  const data = [header];
+
+  for(const st of stores.values()){
+    const row = [
+      month,
+      st.workshop,
+      [...st.sales].filter(Boolean).join(", "),
+      [...st.area].filter(Boolean).join(", ")
+    ];
+
+    productList.forEach(([pKey]) => {
+      const pr = st.products.get(pKey);
+      if(!pr) row.push("");
+      else {
+        const q = Number.isInteger(pr.qty) ? pr.qty : Number(pr.qty.toFixed(2));
+        row.push(`${q} ${[...pr.units].join("/")}`);
+      }
+    });
+
+    row.push(Number.isInteger(st.totalQty) ? st.totalQty : Number(st.totalQty.toFixed(2)));
+    row.push(st.totalValue);
+    data.push(row);
+  }
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+
+  const totalCol = header.length - 1;
+  for(let r=1; r<data.length; r++){
+    const cell = ws[XLSX.utils.encode_cell({r:r,c:totalCol})];
+    if(cell) cell.z = '#,##0';
+  }
+
+  ws["!cols"] = header.map((h,i) => ({
+    wch: i < 4
+      ? Math.min(Math.max(String(h).length + 3, 14), 28)
+      : Math.min(Math.max(String(h).length + 2, 12), 32)
+  }));
+
+  ws["!autofilter"] = {
+    ref: XLSX.utils.encode_range({
+      s:{r:0,c:0}, e:{r:data.length-1,c:header.length-1}
+    })
+  };
+
+  XLSX.utils.book_append_sheet(wb, ws, "Rekap Bulanan");
+  XLSX.writeFile(wb, `Rekap_Bulanan_ADNOC_${month.replace("-","_")}.xlsx`);
+
+  alert(`Rekap berhasil diekspor: ${stores.size} toko unik dari ${rows.length} baris order digabung seperti pivot.`);
+}
+
+function exportWorkshopDbToExcel(){
+  const bawaan = [...WORKSHOP_DATABASE].sort((a,b)=>a.localeCompare(b,"id"));
+  const tambahan = getExtraWorkshops()
+    .map(n=>String(n).trim())
+    .filter(n=>n && !bawaan.some(b=>b.toLowerCase()===n.toLowerCase()));
+  const semua = getAllWorkshops();
+
+  if(!semua.length){
+    alert("Database bengkel masih kosong.");
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: semua nama bengkel (gabungan, terurut A-Z, tanpa duplikat)
+  const dataSemua = [["Nama Bengkel"], ...semua.map(n=>[n])];
+  const wsSemua = XLSX.utils.aoa_to_sheet(dataSemua);
+  wsSemua["!cols"] = [{ wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, wsSemua, "Semua Nama Bengkel");
+
+  // Sheet 2: hanya nama baru yang ditambahkan lewat aplikasi ini
+  const dataBaru = [["Nama Bengkel Baru (Ditambahkan Lewat Aplikasi)"], ...tambahan.map(n=>[n])];
+  const wsBaru = XLSX.utils.aoa_to_sheet(dataBaru);
+  wsBaru["!cols"] = [{ wch: 45 }];
+  XLSX.utils.book_append_sheet(wb, wsBaru, "Bengkel Baru");
+
+  const today = new Date();
+  const stamp = today.toISOString().slice(0,10).replace(/-/g,"");
+  XLSX.writeFile(wb, `Database_Bengkel_ADNOC_${stamp}.xlsx`);
+
+  alert(`Database bengkel berhasil diekspor: ${semua.length} nama total (${tambahan.length} nama baru).`);
+}</script>
+</body></html>
