@@ -9,12 +9,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -22,42 +25,28 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Set Android SDK Environment
-        run: |
-          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-
-      - name: Prepare Web Assets & Install Capacitor
+      - name: Prepare Web Directory
         run: |
           mkdir -p www
           cp -r *.html www/ 2>/dev/null || true
-          cp -r *.js www/ 2>/dev/null || true
-          cp -r *.css www/ 2>/dev/null || true
           if [ ! -f "www/index.html" ]; then
             first_html=$(ls www/*.html 2>/dev/null | head -n 1)
             if [ -n "$first_html" ]; then
               cp "$first_html" www/index.html
             fi
           fi
-          npm init -y
-          npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
-          npx cap init "ADNOC Order" "com.adnoc.order" --web-dir www
-          npx cap add android
-          npx cap sync android
 
-      - name: Build Android APK
+      - name: Build APK using Cordova
         run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          npm install -g cordova
+          cordova create android-app com.adnoc.order "ADNOC Order"
+          cd android-app
+          cp -r ../www/* www/
+          cordova platform add android@12.0.0
+          cordova build android --debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ADNOC-Order-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android-app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
